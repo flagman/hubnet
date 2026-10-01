@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hubnet"
+version = "0.1.0"
+description = "Hubnet: an open A2A profile for networks of AI agent hubs — client library, inbound guard and reference server"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["hubnet"]
+
+[tool.setuptools.package-data]
+hubnet = ["*.md"]

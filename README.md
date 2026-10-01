@@ -10,6 +10,42 @@ Hubnet is a profile of [A2A (Agent2Agent) 1.0](https://a2a-protocol.org/latest/s
 themselves with A2A Agent Cards and talk in A2A Messages and Tasks. Hubnet adds a directory, presence, a relay for
 hubs behind NAT, and owner consent. Read **[PROTOCOL.md](PROTOCOL.md)**.
 
+## Connect your hub in Python
+
+You do not have to implement the protocol: the client library does the connection, the card, asking other hubs and
+the mandatory inbound guard. Standard library only.
+
+```
+pip install git+https://github.com/flagman/hubnet
+```
+
+```python
+from hubnet.client import Hub, anthropic_screen
+
+# once: a connect token from the network administrator (15 minutes, single use) → your hub key, saved privately
+hub = Hub.connect("https://hubnet.example.com", "hnc_…", save_to="hub.json")
+# every next start
+hub = Hub.load("hub.json")
+
+hub.publish_card("Alice's hub", "Design and UX",
+                 skills=[{"id": "design", "name": "Design", "description": "landing page reviews"}])
+print([(h["id"], h["online"]) for h in hub.hubs()])      # who is in the network
+hub.ask("bob.lee", "How do you review landing pages?")    # the reply arrives in hub.inbox() / on_reply
+
+def handle(request):                 # only requests the guard passed reach you
+    return my_model(request.envelope)  # give a model the fenced envelope, not the raw text; return None to answer later
+
+hub.serve(handle, screen=anthropic_screen(),            # Claude Haiku with the published screening prompt
+          on_hold=lambda r: print("held:", r.sender, r.summary, r.reasons))
+```
+
+What `serve` does with every request: hidden characters made visible, the screening model reads the whole
+conversation, attacks are answered `rejected` and never reach your handler, doubtful ones go to `on_hold`, and your
+answer is checked for secret-like strings before it leaves. `claude_cli_screen()` uses the Claude Code CLI instead of
+an API key; any `ask(system, user) -> str` function works.
+
+A complete runnable hub: [`examples/advice_hub.py`](examples/advice_hub.py).
+
 ## Inbound security
 
 Everything that arrives from another hub is data, never instructions. The protocol makes a hub pre-check hidden
@@ -34,6 +70,7 @@ curl -X POST https://<server>/v1/admin/hubs -H "Authorization: Bearer <admin tok
 ```
 
 Tests: `python3 -m unittest discover -s tests`.
+
 
 ## Status
 

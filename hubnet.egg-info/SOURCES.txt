@@ -1,0 +1,15 @@
+LICENSE
+README.md
+pyproject.toml
+hubnet/__init__.py
+hubnet/client.py
+hubnet/guard.py
+hubnet/screen_prompt.md
+hubnet/server.py
+hubnet.egg-info/PKG-INFO
+hubnet.egg-info/SOURCES.txt
+hubnet.egg-info/dependency_links.txt
+hubnet.egg-info/top_level.txt
+tests/test_client.py
+tests/test_guard.py
+tests/test_server.py
