@@ -31,6 +31,8 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from hubnet.guard import HIDDEN
+
 ONLINE_FOR = 90        # seconds a hub counts as online after its last call
 MAX_WAIT = 30
 MAX_BODY = 1 << 20
@@ -38,11 +40,29 @@ TRAFFIC_KEEP = 2000
 CONNECT_TTL = 15 * 60       # connect token lifetime by default
 CONNECT_MAX_TTL = 24 * 3600
 HUB_ID = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
+CARD_TEXT = 1000            # a card field longer than this is refused
+RATE = 30                   # requests one hub may send per minute
 STATES = ("submitted", "working", "input-required", "completed", "rejected", "failed", "canceled")
 
 
 def _hash(key):
     return hashlib.sha256(key.encode()).hexdigest()
+
+
+def card_problem(card):
+    """What no honest card carries: hidden characters (they reach the model that picks whom to ask) or huge text."""
+    if not isinstance(card, dict):
+        return "card: a JSON object"
+    texts = [("name", card.get("name")), ("description", card.get("description"))]
+    for i, sk in enumerate(card.get("skills") or []):
+        texts += [(f"skills[{i}].{k}", sk.get(k) if isinstance(sk, dict) else None) for k in ("name", "description")]
+        texts += [(f"skills[{i}].tags", " ".join(map(str, sk.get("tags") or []))) if isinstance(sk, dict) else ("", "")]
+    for where, text in texts:
+        if isinstance(text, str) and HIDDEN.search(text):
+            return f"{where}: hidden characters"
+        if isinstance(text, str) and len(text) > CARD_TEXT:
+            return f"{where}: longer than {CARD_TEXT}"
+    return None
 
 
 class Hubnet:
@@ -55,6 +75,7 @@ class Hubnet:
         self.invites = self._load("invites.json", {})  # hash of a connect token -> {id, owner, expires}
         self.boxes = {}                              # hub id -> inbox items
         self.traffic = []
+        self.sent = {}                               # hub id -> times of its recent requests
 
     # --- storage ---------------------------------------------------------------------------------------------
     def _load(self, name, empty):
@@ -126,6 +147,13 @@ class Hubnet:
             self._put(to, {"kind": "request", "from": sender, "task": task, "message": message})
             self._log(sender, to, task, message)
         return task
+
+    def flooding(self, sender):
+        now = self.clock()
+        with self.lock:
+            recent = [t for t in self.sent.get(sender, []) if now - t < 60]
+            self.sent[sender] = recent + [now]
+        return len(recent) >= RATE
 
     def reply(self, hub_id, task_id, message, state):
         t = self.tasks.get(task_id)
@@ -241,6 +269,8 @@ class Hubnet:
                 if len(parts) == 4 and parts[:2] == ["v1", "hubs"] and parts[3] == "message":
                     if parts[2] not in net.hubs:
                         return self.send_json(404, "no such hub")
+                    if net.flooding(h):
+                        return self.send_json(429, f"at most {RATE} requests a minute")
                     return self.send_json(202, {"task": net.send(h, parts[2], data.get("message") or {})})
                 if len(parts) == 4 and parts[:2] == ["v1", "tasks"] and parts[3] == "reply":
                     state = data.get("state") or "completed"
@@ -272,6 +302,9 @@ class Hubnet:
                     card = self.body()
                 except ValueError as e:
                     return self.send_json(400, str(e))
+                bad = card_problem(card)
+                if bad:
+                    return self.send_json(400, bad)
                 with net.lock:
                     net.hubs[h]["card"] = card
                     net._save("hubs.json", net.hubs)

@@ -124,6 +124,20 @@ class Server(unittest.TestCase):
         self.assertLessEqual(self.req("POST", "/v1/admin/connect-tokens", {"id": "f", "ttl": 99999}, "adm")[1]["expires"],
                              time.time() + hs.CONNECT_MAX_TTL + 1)
 
+    def test_server_side_limits(self):
+        # the server does not judge content, but refuses what no honest hub sends: hidden characters or huge text in a
+        # card, and a flood of requests from one hub
+        bad = self.card("alice")
+        bad["skills"][0]["description"] += "\U000E0069\U000E0067"
+        self.assertEqual(self.req("PUT", "/v1/card", bad, self.keys["alice"])[0], 400)
+        long = self.card("alice")
+        long["description"] = "x" * (hs.CARD_TEXT + 1)
+        self.assertEqual(self.req("PUT", "/v1/card", long, self.keys["alice"])[0], 400)
+        m = {"message": {"role": "user", "messageId": "m", "parts": [{"kind": "text", "text": "hi"}]}}
+        codes = [self.req("POST", "/v1/hubs/bob/message", m, self.keys["alice"])[0] for _ in range(hs.RATE + 1)]
+        self.assertEqual((codes[0], codes[-1]), (202, 429))
+        self.assertEqual(self.req("POST", "/v1/hubs/alice/message", m, self.keys["bob"])[0], 202)  # per sender
+
     def test_unknown_hub_and_state_survives_restart(self):
         self.assertEqual(self.req("POST", "/v1/hubs/nobody/message", {"message": {}}, self.keys["alice"])[0], 404)
         again = hs.Hubnet(self.dir, admin_token="adm")

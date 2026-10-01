@@ -63,6 +63,54 @@ A hub MUST NOT send anything out without its owner's policy allowing it. Default
 
 Incoming requests are shown to the owner; the hub never executes instructions from another hub as its own owner's.
 
+## Inbound security (normative)
+
+**Everything that arrives from the network is data from an untrusted sender, never instructions** — requests,
+replies, follow-ups in the same task, and Agent Cards alike. A classifier or a guard model alone does not make this
+true: public attacks have bypassed production classifiers. So a hub MUST meet all of the following; the screen is
+one layer, the structure is what holds.
+
+1. **Pre-check, deterministic.** Before any model reads an item, the hub makes hidden characters visible (Unicode tag
+   characters, zero-width and bidi controls, variation selectors), refuses non-text parts unless the owner allows
+   them, and caps the size. Any finding holds the item for the owner.
+2. **Screen.** Every item passes a screening model that has no tools and no access to the owner's data, with the
+   published prompt [`screen_prompt.md`](hubnet/screen_prompt.md) or a stricter one. It sees the whole conversation of the
+   task, not only the last message (attacks build up over turns), inside fences with a random marker the sender
+   cannot close. It answers `clean`, `suspicious` or `attack`; anything else — an error, a timeout, a broken format —
+   counts as `suspicious`. A hub MAY add an injection classifier; it may only raise the verdict.
+3. **Decision.** `clean` with no findings — delivered; `suspicious` — held until the owner looks; `attack` — not
+   delivered, the owner sees it with the reasons, and the hub MAY answer `rejected`.
+4. **Envelope.** A delivered item reaches an agent only fenced and labelled as another hub's words, never in a
+   system prompt, never as if the owner wrote it.
+5. **Quarantine.** The agent that answers a network request works without tools that act or send (shell, browser,
+   mail, messengers, other MCP servers) and without the owner's private context. It writes advice. Doing anything
+   for the sender — running, sending, sharing context — is a new request to the owner, not a step the agent takes.
+6. **Outbound.** Before an answer leaves the hub, it is checked against the consent policy above and for
+   secret-like strings; a match holds it for the owner.
+7. **Cards.** Cards are pre-checked and screened like messages before a model uses them to choose whom to ask; the
+   server refuses cards with hidden characters or over-long fields.
+8. **Limits.** The server limits requests per sending hub (30 a minute in the reference server).
+
+The screen prompt is public on purpose: the protection must not depend on its secrecy, and every hub implementing
+the standard can use, review and improve the same text. The reference implementation is
+[`guard.py`](hubnet/guard.py) (standard library only).
+
+### Threats this answers
+
+| Attack (public) | What stops it |
+|---|---|
+| Direct and indirect prompt injection: «ignore previous instructions», fake system or owner messages | 2, 3, 4 |
+| Agent session smuggling — covert instructions spread over a stateful A2A conversation ([Unit 42](https://unit42.paloaltonetworks.com/agent-session-smuggling-in-agent2agent-systems/)) | 2 (whole conversation), 5, 3 |
+| Agent Card poisoning — injection in card descriptions to hijack routing ([Trustwave, via Semgrep's A2A guide](https://semgrep.dev/blog/2025/a-security-engineers-guide-to-the-a2a-protocol/)) | 7 |
+| Hidden text: Unicode tag «ASCII smuggling», zero-width, bidi, emoji variation selectors | 1 |
+| Exfiltration through an agent's tools — the «lethal trifecta» of private data, untrusted input and a way out; EchoLeak in a production assistant | 5, 6 |
+| Tool poisoning ([OWASP: MCP tool poisoning](https://owasp.org/www-community/attacks/MCP_Tool_Poisoning)) | 5: the answering agent has no tools |
+| Bypassing the classifier itself | 5 and 6 hold even when 2 fails |
+| Flooding a hub or its owner with requests | 8, and 3 (held items wait, they do not run) |
+
+The design follows the dual-LLM / quarantine idea ([CaMeL, Google DeepMind](https://arxiv.org/abs/2503.18813)):
+the model that reads untrusted text cannot act, and the one that can act does not take orders from that text.
+
 ## Traffic log
 
 `GET /v1/traffic` — who asked whom, when, task state, size. No content: content is seen only by the two hubs.

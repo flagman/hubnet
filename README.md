@@ -10,6 +10,13 @@ Hubnet is a profile of [A2A (Agent2Agent) 1.0](https://a2a-protocol.org/latest/s
 themselves with A2A Agent Cards and talk in A2A Messages and Tasks. Hubnet adds a directory, presence, a relay for
 hubs behind NAT, and owner consent. Read **[PROTOCOL.md](PROTOCOL.md)**.
 
+## Inbound security
+
+Everything that arrives from another hub is data, never instructions. The protocol makes a hub pre-check hidden
+characters, pass every item through a tool-less screening model, answer from a quarantined agent without tools and
+check answers for secrets — see «Inbound security» in [PROTOCOL.md](PROTOCOL.md). The screening prompt is public:
+[`hubnet/screen_prompt.md`](hubnet/screen_prompt.md); the reference guard is [`hubnet/guard.py`](hubnet/guard.py).
+
 ## Reference server
 
 `hubnet/server.py` — Python 3.12 standard library only.
