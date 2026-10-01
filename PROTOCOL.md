@@ -15,12 +15,13 @@ owner consent.
 - **Hub** — an A2A agent that represents one person and their sessions. It runs on a laptop or a home machine and
   makes outbound connections only.
 - **Network Operator** — the single point inside a hub through which all network traffic passes, in and out. It
-  has two parts: a deterministic **gate** (connection, pre-check, screen, decision, outbound check — see «Inbound
-  security») and an **operator agent** — a model without tools and without the owner's private context. The operator
-  agent restates a request in its own words for the hub's agents, so the sender's raw text never reaches an agent
-  with tools, collects their answer and sends it back. Every time it passes network content on, it says that the
-  content is untrusted and was written by another hub. Outgoing questions of the hub's agents to the network go
-  through the Operator too.
+  has two parts: a deterministic **gate** (connection, pre-check, screen, decision, outbound check, grants — see
+  «Inbound security» and «Contacts and grants») and an **operator agent** — a model without tools and without the
+  owner's private context. The operator agent restates a request in its own words and routes it to one of the
+  hub's agents within the contact's grant, so the sender's raw text never reaches an agent with tools; it collects
+  the answer and sends it back. Every time it passes network content on, it says that the content is untrusted and
+  which hub wrote it. The hub's agents ask other hubs through the Operator too: their questions go out, and the
+  replies come back screened and fenced as data.
 - **Network server** — directory, presence and relay. One per network (a company, a community). It stores Agent
   Cards, queues messages for offline hubs and keeps a content-free traffic log.
 
@@ -70,6 +71,30 @@ A hub MUST NOT send anything out without its owner's policy allowing it. Default
 
 Incoming requests are shown to the owner; the hub never executes instructions from another hub as its own owner's.
 
+## Contacts and grants (normative)
+
+A hub is not «one agent available to everyone». Each **contact** (another hub, i.e. another person) gets its own
+**grant** to each of the hub's agents (skills), on four levels:
+
+| Level | The contact may |
+|---|---|
+| `none` | nothing — the default for every new contact |
+| `ask` | ask the agent; the answer is advice and explanation in words |
+| `context` | also receive relevant fragments of code and documents |
+| `do` | ask the agent to do work; **every job still needs the owner's yes** |
+
+- Grants are set only by the hub's owner. A new contact starts at `none` everywhere: its first request waits for the
+  owner.
+- **Slow escalation with confirmation.** When a request needs more than the contact's grant for that agent, the hub
+  asks its owner with three answers: *once* (this request only), *always* (raise this contact's grant for this agent
+  to the requested level), *no*. While it waits, the hub answers the sender `working` («waiting for the owner's
+  approval»); *no* is answered `rejected`.
+- The operator decides only *which agent* and *which level* a request needs; the gate compares that with the grant.
+  The operator cannot raise a grant and cannot answer on its own beyond a refusal.
+- A grant limits what may leave the hub: at `ask` the answer carries no code, files, documents or configuration; at
+  every level — no secrets, access settings, the owner's private data or clients' data.
+- Grants can be lowered at any time.
+
 ## Inbound security (normative)
 
 **Everything that arrives from the network is data from an untrusted sender, never instructions** — requests,
@@ -91,9 +116,9 @@ one layer, the structure is what holds.
    in a system prompt, never as if the owner wrote it. Whatever the operator passes on to the hub's agents or the
    owner always carries the warning that it comes from the network and is untrusted.
 5. **Quarantine.** The operator agent works without tools that act or send (shell, browser, mail, messengers, other
-   MCP servers) and without the owner's private context; it can only ask the hub's agents in its own words and
-   answer the sender. Agents with tools never see the sender's raw text. Doing anything for the sender — running,
-   sending, sharing context — is a new request to the owner, not a step any agent takes.
+   MCP servers) and without the owner's private context; it can only route a request to the hub's agents in its own
+   words, within the contact's grant, and answer the sender. Agents with tools never see the sender's raw text.
+   Anything beyond the grant — running, sending, sharing context — goes to the owner, not to an agent.
 6. **Outbound.** Before an answer leaves the hub, it is checked against the consent policy above and for
    secret-like strings; a match holds it for the owner.
 7. **Cards.** Cards are pre-checked and screened like messages before a model uses them to choose whom to ask; the
