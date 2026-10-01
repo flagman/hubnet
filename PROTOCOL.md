@@ -20,7 +20,9 @@ owner consent.
 ## Identity
 
 The network administrator registers a hub and gets its key once: `POST /v1/admin/hubs {id, owner}` → `{key}`.
-The server stores only a hash. A hub authenticates every call with `Authorization: Bearer <key>`.
+The server stores only a hash. A hub authenticates every call with `Authorization: Bearer <key>`. Hub ids are
+lowercase `first.last`-like names (`[a-z0-9]` groups joined by `.` or `-`); the administrator retires a hub with
+`DELETE /v1/admin/hubs/{id}`.
 
 ## Agent Card
 

@@ -89,6 +89,17 @@ class Server(unittest.TestCase):
         t.join(3)
         self.assertEqual(len(got["r"][1]["items"]), 1)
 
+    def test_hub_ids_like_people_and_removal(self):
+        # ids like «first.last»; the administrator can retire a hub
+        code, made = self.req("POST", "/v1/admin/hubs", {"id": "alice.smith", "owner": "Alice"}, "adm")
+        self.assertEqual(code, 201)
+        for bad in ("Alice", "a b", "../x", ".a", "a.", ""):
+            self.assertEqual(self.req("POST", "/v1/admin/hubs", {"id": bad}, "adm")[0], 400, bad)
+        self.assertEqual(self.req("DELETE", "/v1/admin/hubs/alice.smith", token="wrong")[0], 401)
+        self.assertEqual(self.req("DELETE", "/v1/admin/hubs/alice.smith", token="adm")[0], 200)
+        self.assertEqual(self.req("GET", "/v1/hubs", token=made["key"])[0], 401)
+        self.assertEqual(self.req("DELETE", "/v1/admin/hubs/nobody", token="adm")[0], 404)
+
     def test_unknown_hub_and_state_survives_restart(self):
         self.assertEqual(self.req("POST", "/v1/hubs/nobody/message", {"message": {}}, self.keys["alice"])[0], 404)
         again = hs.Hubnet(self.dir, admin_token="adm")

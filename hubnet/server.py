@@ -6,6 +6,7 @@ whom, its state; only the addressee may answer. The traffic log for a network vi
 
   python3 -m hubnet.server --dir /data --port 8080          (HUBNET_ADMIN_TOKEN — administrator token)
   POST /v1/admin/hubs {id, owner}          (administrator) register a hub → its key, shown once
+  DELETE /v1/admin/hubs/<id>               (administrator) retire a hub
   PUT  /v1/card <AgentCard>                hub: my card (also marks me online)
   GET  /v1/hubs                            hubs of the network: cards, online
   POST /v1/hubs/<id>/message {message}     ask a hub → a task (submitted)
@@ -16,6 +17,7 @@ whom, its state; only the addressee may answer. The traffic log for a network vi
 Python standard library only.
 """
 import argparse
+import re
 import hashlib
 import hmac
 import json
@@ -31,6 +33,7 @@ ONLINE_FOR = 90        # seconds a hub counts as online after its last call
 MAX_WAIT = 30
 MAX_BODY = 1 << 20
 TRAFFIC_KEEP = 2000
+HUB_ID = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
 STATES = ("submitted", "working", "input-required", "completed", "rejected", "failed", "canceled")
 
 
@@ -184,8 +187,8 @@ class Hubnet:
                     if not net.admin or not hmac.compare_digest(self.token(), net.admin):
                         return self.send_json(401, "administrator token required")
                     hid = str(data.get("id") or "")
-                    if not hid.replace("-", "").isalnum():
-                        return self.send_json(400, "id: latin letters, digits, dash")
+                    if not HUB_ID.fullmatch(hid):
+                        return self.send_json(400, "id: lowercase latin letters, digits, dot, dash (first.last)")
                     return self.send_json(201, {"id": hid, "key": net.add_hub(hid, data.get("owner") or hid)})
                 h = self.hub()
                 if not h:
@@ -202,6 +205,18 @@ class Hubnet:
                     code, out = net.reply(h, parts[2], data.get("message") or {}, state)
                     return self.send_json(code, out)
                 return self.send_json(404, "no such path")
+
+            def do_DELETE(self):
+                parts = urlparse(self.path).path.strip("/").split("/")
+                if len(parts) != 4 or parts[:3] != ["v1", "admin", "hubs"]:
+                    return self.send_json(404, "no such path")
+                if not net.admin or not hmac.compare_digest(self.token(), net.admin):
+                    return self.send_json(401, "administrator token required")
+                with net.lock:
+                    if net.hubs.pop(parts[3], None) is None:
+                        return self.send_json(404, "no such hub")
+                    net._save("hubs.json", net.hubs)
+                return self.send_json(200, {"removed": parts[3]})
 
             def do_PUT(self):
                 if urlparse(self.path).path != "/v1/card":
