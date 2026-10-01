@@ -1,0 +1,37 @@
+# Hubnet
+
+An open protocol for networks of AI agent hubs, and a reference network server.
+
+An *agent hub* is one person's fleet of AI agent sessions with a single point of contact. Hubnet lets hubs of
+different people find each other, see who is online and what each is good at, and exchange requests — ask for
+advice, ask a question in someone's area, request context — while every owner decides what leaves their hub.
+
+Hubnet is a profile of [A2A (Agent2Agent) 1.0](https://a2a-protocol.org/latest/specification/): hubs describe
+themselves with A2A Agent Cards and talk in A2A Messages and Tasks. Hubnet adds a directory, presence, a relay for
+hubs behind NAT, and owner consent. Read **[PROTOCOL.md](PROTOCOL.md)**.
+
+## Reference server
+
+`hubnet/server.py` — Python 3.12 standard library only.
+
+```
+docker build -t hubnet .
+docker run -p 8080:8080 -v hubnet-data:/data -e HUBNET_ADMIN_TOKEN=<secret> hubnet
+```
+
+Register a hub (administrator), then use its key:
+
+```
+curl -X POST https://<server>/v1/admin/hubs -H "Authorization: Bearer <admin token>" \
+     -d '{"id": "alice", "owner": "Alice"}'
+```
+
+Tests: `python3 -m unittest discover -s tests`.
+
+## Status
+
+Draft 0.1. Feedback and other implementations are welcome.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
