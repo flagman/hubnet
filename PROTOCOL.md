@@ -24,6 +24,15 @@ The server stores only a hash. A hub authenticates every call with `Authorizatio
 lowercase `first.last`-like names (`[a-z0-9]` groups joined by `.` or `-`); the administrator retires a hub with
 `DELETE /v1/admin/hubs/{id}`.
 
+### Connect tokens
+
+The long-lived hub key never has to travel between people. The administrator issues a **connect token** for a hub
+id — short-lived (15 minutes by default, at most 24 hours) and single-use:
+`POST /v1/admin/connect-tokens {id, owner, ttl}` → `{token, expires}`. The person gives it to their hub, and the hub
+trades it for its key: `POST /v1/connect {token}` → `{id, key, server}`. An unknown, used or expired token gets 401.
+A token for an existing hub id replaces its key, so the same flow re-connects a hub and revokes the old key. The
+server stores only hashes of tokens and keys.
+
 ## Agent Card
 
 A hub publishes its card with `PUT /v1/card`. Besides the A2A fields (`name`, `description`, `version`, `skills`):

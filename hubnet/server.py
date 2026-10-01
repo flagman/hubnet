@@ -7,6 +7,8 @@ whom, its state; only the addressee may answer. The traffic log for a network vi
   python3 -m hubnet.server --dir /data --port 8080          (HUBNET_ADMIN_TOKEN — administrator token)
   POST /v1/admin/hubs {id, owner}          (administrator) register a hub → its key, shown once
   DELETE /v1/admin/hubs/<id>               (administrator) retire a hub
+  POST /v1/admin/connect-tokens {id, owner, ttl}  (administrator) short-lived single-use connect token for a hub
+  POST /v1/connect {token}                 trade a connect token for the hub key (no other credential needed)
   PUT  /v1/card <AgentCard>                hub: my card (also marks me online)
   GET  /v1/hubs                            hubs of the network: cards, online
   POST /v1/hubs/<id>/message {message}     ask a hub → a task (submitted)
@@ -33,6 +35,8 @@ ONLINE_FOR = 90        # seconds a hub counts as online after its last call
 MAX_WAIT = 30
 MAX_BODY = 1 << 20
 TRAFFIC_KEEP = 2000
+CONNECT_TTL = 15 * 60       # connect token lifetime by default
+CONNECT_MAX_TTL = 24 * 3600
 HUB_ID = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
 STATES = ("submitted", "working", "input-required", "completed", "rejected", "failed", "canceled")
 
@@ -48,6 +52,7 @@ class Hubnet:
         self.lock = threading.Condition()
         self.hubs = self._load("hubs.json", {})      # id -> {owner, key_hash, card, seen}
         self.tasks = self._load("tasks.json", {})    # id -> {from, to, created}
+        self.invites = self._load("invites.json", {})  # hash of a connect token -> {id, owner, expires}
         self.boxes = {}                              # hub id -> inbox items
         self.traffic = []
 
@@ -72,6 +77,32 @@ class Hubnet:
             self.hubs[hub_id] = {"owner": owner, "key_hash": _hash(key), "card": None, "seen": 0}
             self._save("hubs.json", self.hubs)
         return key
+
+    def connect_token(self, hub_id, owner, ttl):
+        """Short-lived, single-use token a person uses to connect their hub; the server keeps only its hash."""
+        token = "hnc_" + secrets.token_urlsafe(24)
+        expires = self.clock() + min(max(int(ttl or CONNECT_TTL), 30), CONNECT_MAX_TTL)
+        with self.lock:
+            self.invites[_hash(token)] = {"id": hub_id, "owner": owner, "expires": expires}
+            self._save("invites.json", self.invites)
+        return token, expires
+
+    def connect(self, token):
+        """Trade a connect token for the hub key (new hub, or a new key for an existing one)."""
+        with self.lock:
+            inv = self.invites.pop(_hash(token or ""), None)
+            self.invites = {h: x for h, x in self.invites.items() if x["expires"] > self.clock()}
+            self._save("invites.json", self.invites)
+        if not inv or inv["expires"] <= self.clock():
+            return None, None
+        owner = inv["owner"] or (self.hubs.get(inv["id"]) or {}).get("owner") or inv["id"]
+        key = "hn_" + secrets.token_urlsafe(32)
+        with self.lock:
+            old = self.hubs.get(inv["id"]) or {}
+            self.hubs[inv["id"]] = {**old, "owner": owner, "key_hash": _hash(key), "card": old.get("card"),
+                                    "seen": old.get("seen", 0)}
+            self._save("hubs.json", self.hubs)
+        return inv["id"], key
 
     def hub_by_key(self, key):
         h = _hash(key or "")
@@ -183,6 +214,19 @@ class Hubnet:
                     data = self.body()
                 except ValueError as e:
                     return self.send_json(400, str(e))
+                if u.path == "/v1/connect":  # no hub key yet: the connect token is the credential
+                    hid, key = net.connect(str(data.get("token") or ""))
+                    if not hid:
+                        return self.send_json(401, "connect token unknown, used or expired")
+                    return self.send_json(200, {"id": hid, "key": key, "server": f"https://{self.headers.get('Host', '')}"})
+                if u.path == "/v1/admin/connect-tokens":
+                    if not net.admin or not hmac.compare_digest(self.token(), net.admin):
+                        return self.send_json(401, "administrator token required")
+                    hid = str(data.get("id") or "")
+                    if not HUB_ID.fullmatch(hid):
+                        return self.send_json(400, "id: lowercase latin letters, digits, dot, dash (first.last)")
+                    tok, exp = net.connect_token(hid, data.get("owner"), data.get("ttl"))
+                    return self.send_json(201, {"id": hid, "token": tok, "expires": exp})
                 if u.path == "/v1/admin/hubs":
                     if not net.admin or not hmac.compare_digest(self.token(), net.admin):
                         return self.send_json(401, "administrator token required")

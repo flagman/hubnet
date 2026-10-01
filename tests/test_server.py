@@ -100,6 +100,30 @@ class Server(unittest.TestCase):
         self.assertEqual(self.req("GET", "/v1/hubs", token=made["key"])[0], 401)
         self.assertEqual(self.req("DELETE", "/v1/admin/hubs/nobody", token="adm")[0], 404)
 
+    def test_connect_token_is_short_lived_and_single_use(self):
+        # the administrator hands a person a connect token instead of the hub key; the hub trades it for its key
+        code, t = self.req("POST", "/v1/admin/connect-tokens", {"id": "carol.white", "owner": "Carol", "ttl": 600}, "adm")
+        self.assertEqual((code, t["id"]), (201, "carol.white"))
+        self.assertTrue(t["token"].startswith("hnc_") and t["expires"] > time.time())
+        self.assertEqual(self.req("POST", "/v1/admin/connect-tokens", {"id": "x"}, "wrong")[0], 401)
+        code, got = self.req("POST", "/v1/connect", {"token": t["token"]})
+        self.assertEqual((code, got["id"]), (200, "carol.white"))
+        self.assertEqual(self.req("GET", "/v1/hubs", token=got["key"])[0], 200)
+        self.assertEqual(self.req("POST", "/v1/connect", {"token": t["token"]})[0], 401)      # one use
+        late = self.req("POST", "/v1/admin/connect-tokens", {"id": "dan.green", "ttl": 60}, "adm")[1]
+        self.net.clock = lambda: time.time() + 61
+        self.assertEqual(self.req("POST", "/v1/connect", {"token": late["token"]})[0], 401)   # expired
+        self.net.clock = time.time
+        # an existing hub reconnects with a new token: its key is replaced, the old one stops working
+        again = self.req("POST", "/v1/admin/connect-tokens", {"id": "carol.white"}, "adm")[1]
+        new = self.req("POST", "/v1/connect", {"token": again["token"]})[1]["key"]
+        self.assertEqual(self.req("GET", "/v1/hubs", token=got["key"])[0], 401)
+        self.assertEqual(self.req("GET", "/v1/hubs", token=new)[0], 200)
+        self.assertGreater(len(self.req("POST", "/v1/admin/connect-tokens", {"id": "e", "ttl": 99999}, "adm")[1]
+                               ["token"]), 10)
+        self.assertLessEqual(self.req("POST", "/v1/admin/connect-tokens", {"id": "f", "ttl": 99999}, "adm")[1]["expires"],
+                             time.time() + hs.CONNECT_MAX_TTL + 1)
+
     def test_unknown_hub_and_state_survives_restart(self):
         self.assertEqual(self.req("POST", "/v1/hubs/nobody/message", {"message": {}}, self.keys["alice"])[0], 404)
         again = hs.Hubnet(self.dir, admin_token="adm")
