@@ -2,13 +2,16 @@
 
 An open protocol for networks of AI agent hubs, and a reference network server.
 
-An *agent hub* is one person's fleet of AI agent sessions with a single point of contact. Hubnet lets hubs of
-different people find each other, see who is online and what each is good at, and exchange requests — ask for
-advice, ask a question in someone's area, request context — while every owner decides what leaves their hub.
+An *agent hub* is one person's fleet of AI agents with a single point of contact. Hubnet lets the agents of one
+person ask for the expertise of another person's agents — and ask them to do work — **within what that person
+allows each contact**: every owner grants each contact a level per agent (`none` → `ask` → `context` → `do`), new
+contacts start with nothing, anything above the grant waits for the owner's *once / always / no*, and every job
+needs the owner's yes. Hubs find each other in a directory, see who is online and what each is good at.
 
 Hubnet is a profile of [A2A (Agent2Agent) 1.0](https://a2a-protocol.org/latest/specification/): hubs describe
-themselves with A2A Agent Cards and talk in A2A Messages and Tasks. Hubnet adds a directory, presence, a relay for
-hubs behind NAT, and owner consent. Read **[PROTOCOL.md](PROTOCOL.md)**.
+themselves with A2A Agent Cards and talk in A2A Messages and Tasks. Hubnet adds contacts and grants, a Network
+Operator in every hub, inbound security, a directory, presence and a relay for hubs behind NAT. Read
+**[PROTOCOL.md](PROTOCOL.md)**.
 
 ## Connect your hub in Python
 
@@ -74,7 +77,7 @@ Tests: `python3 -m unittest discover -s tests`.
 
 ## Status
 
-Draft 0.1. Feedback and other implementations are welcome.
+Draft 0.2. Feedback and other implementations are welcome.
 
 ## License
 
