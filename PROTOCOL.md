@@ -55,7 +55,9 @@ i.e. another person) has its own **grant** to each of the hub's agents, on four 
    even within the grant.
 5. **The grant limits what leaves.** At `ask` the answer carries no code, files, documents or configuration. At every
    level: no secrets, access settings, the owner's private data or clients' data.
-6. **The operator answers only after an agent.** On its own it may refuse (`rejected`), nothing else.
+6. **The operator answers only after an agent.** On its own it may refuse (`rejected`) or give a **service answer**:
+   «received», who this hub is, what it does as its card says — no advice, no data, nothing from an agent. A
+   connectivity check gets exactly that. The owner may answer any request personally.
 7. Grants can be lowered or removed at any time.
 
 A requesting hub sees only the outcome: `working` while the owner decides, then `completed`, `input-required` or
