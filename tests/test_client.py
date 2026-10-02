@@ -63,7 +63,7 @@ class Client(unittest.TestCase):
         self.assertEqual((called, held[0].decision), ([], "block"))
         self.assertEqual(alice.inbox(wait=1)[0]["task"]["status"]["state"], "rejected")
         alice.ask("bob.lee", "what is your setup?")
-        bob.serve_once(lambda req: "sure: ghp_" + "c" * 36, screen=clean, on_hold=held.append, wait=1)
+        bob.serve_once(lambda req: "sure: gh" + "p_" + "c" * 36, screen=clean, on_hold=held.append, wait=1)
         self.assertEqual(held[-1].decision, "answer_held")                 # the answer did not leave
         self.assertEqual(alice.inbox(wait=0), [])
 

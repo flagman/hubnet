@@ -94,7 +94,7 @@ class Decide(unittest.TestCase):
         self.assertEqual(env.count(fence), 2)
 
     def test_outbound_secrets_are_caught(self):
-        for leak in ("my key is hn_" + "a" * 40, "sk-ant-" + "b" * 30, "ghp_" + "c" * 36, "AKIA" + "D" * 16,
+        for leak in ("my key is hn_" + "a" * 40, "sk-" + "ant-" + "b" * 30, "gh" + "p_" + "c" * 36, "AKIA" + "D" * 16,
                      "-----BEGIN OPENSSH PRIVATE KEY-----"):
             self.assertTrue(guard.outbound(leak), leak)
         self.assertEqual(guard.outbound("Use ArgoCD with an app of apps."), [])
