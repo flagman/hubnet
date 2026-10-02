@@ -79,7 +79,7 @@ Every call a hub makes to the server carries two headers:
 The server records both for each hub and returns them in `GET /v1/hubs` as `client: {software, protocol}`, so
 everyone in the network sees who runs what. The server's card (`/.well-known/agent-card.json`) states
 `hubnet: {protocol, min_protocol}`. A client whose `Hubnet-Protocol` is below `min_protocol` gets `426 Upgrade
-Required` with a message, instead of half-working. A client that sends no header is treated as legacy and served
+Required` with a message, instead of half-working. A client that sends no header is treated as an old one and served
 for now; servers MAY start refusing it in a later version.
 
 Versions compare as numbers (`0.10` > `0.9`). Within `0.x`, a minor version may change behaviour; servers keep
