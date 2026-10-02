@@ -42,7 +42,17 @@ CONNECT_MAX_TTL = 24 * 3600
 HUB_ID = re.compile(r"[a-z0-9]+(?:[.-][a-z0-9]+)*")
 CARD_TEXT = 1000            # a card field longer than this is refused
 RATE = 30                   # requests one hub may send per minute
+PROTOCOL = "0.2"        # версия профиля Hubnet, которую говорит этот сервер (PROTOCOL.md)
+MIN_PROTOCOL = "0.1"    # старше — 426: клиенту пора обновиться
 STATES = ("submitted", "working", "input-required", "completed", "rejected", "failed", "canceled")
+
+
+def _version(v):
+    """«0.2» → (0, 2): версии протокола сравниваются по числам."""
+    try:
+        return tuple(int(x) for x in str(v).split(".")[:3])
+    except ValueError:
+        return (0,)
 
 
 def _hash(key):
@@ -135,7 +145,7 @@ class Hubnet:
     def listing(self):
         now = self.clock()
         return [{"id": i, "owner": x["owner"], "card": x["card"], "online": now - x["seen"] < ONLINE_FOR,
-                 "seen": x["seen"]} for i, x in sorted(self.hubs.items())]
+                 "seen": x["seen"], "client": x.get("client")} for i, x in sorted(self.hubs.items())]
 
     # --- tasks ----------------------------------------------------------------------------------------------
     def send(self, sender, to, message):
@@ -210,11 +220,27 @@ class Hubnet:
                 return a[7:] if a.startswith("Bearer ") else ""
 
             def hub(self):
+                """Хаб по ключу; заодно — кто он: программа и версия протокола (заголовки Hubnet-Client,
+                Hubnet-Protocol). Протокол старше MIN_PROTOCOL — не пускаем (426)."""
+                self.too_old = None
                 h = net.hub_by_key(self.token())
                 if h:
+                    proto = (self.headers.get("Hubnet-Protocol") or "").strip()
+                    if proto and _version(proto) < _version(MIN_PROTOCOL):
+                        self.too_old = proto
+                        return None
                     with net.lock:
                         net.touch(h)
+                        if proto or self.headers.get("Hubnet-Client"):
+                            net.hubs[h]["client"] = {"software": (self.headers.get("Hubnet-Client") or "")[:120],
+                                                     "protocol": proto[:20]}
                 return h
+
+            def unauthorized(self):
+                if self.too_old:
+                    return self.send_json(426, f"protocol {self.too_old} is too old: this server speaks {PROTOCOL}, "
+                                               f"needs at least {MIN_PROTOCOL} — update your hub")
+                return self.send_json(401, "hub key required")
 
             def do_GET(self):
                 u = urlparse(self.path)
@@ -223,10 +249,11 @@ class Hubnet:
                                                 "description": "Network of agent hubs: directory, presence, A2A relay",
                                                 "url": f"https://{self.headers.get('Host', '')}/v1",
                                                 "securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}},
-                                                "skills": []})
+                                                "skills": [],
+                                                "hubnet": {"protocol": PROTOCOL, "min_protocol": MIN_PROTOCOL}})
                 h = self.hub()
                 if not h:
-                    return self.send_json(401, "hub key required")
+                    return self.unauthorized()
                 if u.path == "/v1/hubs":
                     return self.send_json(200, {"hubs": net.listing()})
                 if u.path == "/v1/inbox":
@@ -264,7 +291,7 @@ class Hubnet:
                     return self.send_json(201, {"id": hid, "key": net.add_hub(hid, data.get("owner") or hid)})
                 h = self.hub()
                 if not h:
-                    return self.send_json(401, "hub key required")
+                    return self.unauthorized()
                 parts = u.path.strip("/").split("/")
                 if len(parts) == 4 and parts[:2] == ["v1", "hubs"] and parts[3] == "message":
                     if parts[2] not in net.hubs:
@@ -297,7 +324,7 @@ class Hubnet:
                     return self.send_json(404, "no such path")
                 h = self.hub()
                 if not h:
-                    return self.send_json(401, "hub key required")
+                    return self.unauthorized()
                 try:
                     card = self.body()
                 except ValueError as e:

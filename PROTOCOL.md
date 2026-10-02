@@ -68,6 +68,23 @@ i.e. another person) has its own **grant** to each of the hub's agents, on four 
 A requesting hub sees only the outcome: `working` while the owner decides, then `completed`, `input-required` or
 `rejected`.
 
+## Versions and compatibility
+
+Every call a hub makes to the server carries two headers:
+
+- `Hubnet-Client: <software>/<version>` — which implementation and which build, e.g.
+  `agents-hub-core/2026-10-02+59cc4c7` or `hubnet-python/0.2`;
+- `Hubnet-Protocol: <major.minor>` — the version of this profile the client speaks (this document: `0.2`).
+
+The server records both for each hub and returns them in `GET /v1/hubs` as `client: {software, protocol}`, so
+everyone in the network sees who runs what. The server's card (`/.well-known/agent-card.json`) states
+`hubnet: {protocol, min_protocol}`. A client whose `Hubnet-Protocol` is below `min_protocol` gets `426 Upgrade
+Required` with a message, instead of half-working. A client that sends no header is treated as legacy and served
+for now; servers MAY start refusing it in a later version.
+
+Versions compare as numbers (`0.10` > `0.9`). Within `0.x`, a minor version may change behaviour; servers keep
+`min_protocol` as low as they safely can, and every change is listed in this document.
+
 ## Identity
 
 The network administrator registers a hub and gets its key once: `POST /v1/admin/hubs {id, owner}` → `{key}`.

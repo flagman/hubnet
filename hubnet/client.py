@@ -25,6 +25,8 @@ import urllib.request
 from hubnet import guard
 
 DECLINED = "This hub does not take this request."
+PROTOCOL = "0.2"                 # версия профиля Hubnet (PROTOCOL.md, «Versions and compatibility»)
+CLIENT = "hubnet-python/0.2"
 
 
 class Request:
@@ -45,7 +47,7 @@ class Request:
 
 
 class Hub:
-    def __init__(self, server, key, hub_id=None, user_agent="hubnet-client/0.1"):
+    def __init__(self, server, key, hub_id=None, user_agent=CLIENT):
         self.server, self.key, self.id, self.ua = server.rstrip("/"), key, hub_id, user_agent
         self.history = {}   # contextId -> earlier texts: the screen sees the whole conversation
 
@@ -175,8 +177,8 @@ def claude_cli_screen(model="haiku"):
     return ask
 
 
-def _call(server, method, path, body=None, key=None, timeout=20, ua="hubnet-client/0.1"):
-    headers = {"Content-Type": "application/json", "User-Agent": ua}
+def _call(server, method, path, body=None, key=None, timeout=20, ua=CLIENT):
+    headers = {"Content-Type": "application/json", "User-Agent": ua, "Hubnet-Client": ua, "Hubnet-Protocol": PROTOCOL}
     if key:
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(server + path, method=method, headers=headers,

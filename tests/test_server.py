@@ -138,6 +138,30 @@ class Server(unittest.TestCase):
         self.assertEqual((codes[0], codes[-1]), (202, 429))
         self.assertEqual(self.req("POST", "/v1/hubs/alice/message", m, self.keys["bob"])[0], 202)  # per sender
 
+    def test_clients_say_who_they_are_and_old_ones_are_told_to_upgrade(self):
+        # владелец 02.10: «заголовок с названием хаба и его версией — чтобы было понятно, кто на какой версии, и
+        # делать совместимость клиентов»
+        def call(protocol, client="agents-hub-core/2026-10-02+abc1234"):
+            c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+            h = {"Authorization": f"Bearer {self.keys['alice']}", "Hubnet-Client": client}
+            if protocol:
+                h["Hubnet-Protocol"] = protocol
+            c.request("GET", "/v1/hubs", headers=h)
+            r = c.getresponse()
+            body = r.read()
+            c.close()
+            return r.status, json.loads(body)
+        self.assertEqual(call(hs.PROTOCOL)[0], 200)
+        hubs = {h["id"]: h for h in self.req("GET", "/v1/hubs", token=self.keys["bob"])[1]["hubs"]}
+        self.assertEqual(hubs["alice"]["client"], {"software": "agents-hub-core/2026-10-02+abc1234",
+                                                   "protocol": hs.PROTOCOL})
+        code, body = call("0.0")
+        self.assertEqual(code, 426)
+        self.assertIn(hs.MIN_PROTOCOL, json.dumps(body))
+        self.assertEqual(call(None)[0], 200)                       # без заголовка — старый клиент, пока пускаем
+        card = self.req("GET", "/.well-known/agent-card.json")[1]
+        self.assertEqual((card["hubnet"]["protocol"], card["hubnet"]["min_protocol"]), (hs.PROTOCOL, hs.MIN_PROTOCOL))
+
     def test_unknown_hub_and_state_survives_restart(self):
         self.assertEqual(self.req("POST", "/v1/hubs/nobody/message", {"message": {}}, self.keys["alice"])[0], 404)
         again = hs.Hubnet(self.dir, admin_token="adm")
