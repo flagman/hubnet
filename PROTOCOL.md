@@ -59,6 +59,11 @@ i.e. another person) has its own **grant** to each of the hub's agents, on four 
    «received», who this hub is, what it does as its card says — no advice, no data, nothing from an agent. A
    connectivity check gets exactly that. The owner may answer any request personally.
 7. Grants can be lowered or removed at any time.
+8. **Routes.** The operator is the entry point. Once the owner answers *always*, a route to that agent is open for
+   that contact: the answer tells the sender to address the agent directly (`message.metadata.agent`), and further
+   requests that name it go straight to the agent — fenced and labelled as untrusted, with the level's rule — and the
+   agent's answer goes back after the outbound check. Without a grant, with a doubtful screen or to an unknown agent,
+   a request goes through the operator as before. Work at `do` still waits for the owner's yes.
 
 A requesting hub sees only the outcome: `working` while the owner decides, then `completed`, `input-required` or
 `rejected`.
@@ -94,7 +99,8 @@ while it runs. `GET /v1/hubs` lists hubs with their cards and `online`.
 ## Requests
 
 1. Hub A: `POST /v1/hubs/{B}/message {message: <A2A Message>}` → `202 {task: <A2A Task, state "submitted">}`.
-   `message.metadata.agent` MAY name the agent of hub A that asks.
+   `message.metadata.from_agent` MAY name the agent of hub A that asks; `message.metadata.agent` MAY name the agent
+   of hub B it is for (an open route).
 2. Hub B: `GET /v1/inbox?wait=25` → `{items: [{kind: "request", from: "A", task, message}]}`.
 3. Hub B's Network Operator handles it (grants, inbound security) and answers:
    `POST /v1/tasks/{id}/reply {message, state}` with an A2A task state: `working`, `input-required`, `completed`,
